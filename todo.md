@@ -43,7 +43,7 @@ This prevents two sessions from working on the same task, and lets anyone see wh
 - [x] Unit tests: 20 tests (validation, known spots, sum to 1.0, seeded consistency)
 
 ### CLI Verification
-- [ ] Simple CLI script: input cards, print equity/win/tie/lose
+- [x] Simple CLI script: input cards, print equity/win/tie/lose
 - [ ] Cross-check 5+ scenarios against known poker calculators
 
 ---
