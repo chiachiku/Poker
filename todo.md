@@ -68,10 +68,13 @@ This prevents two sessions from working on the same task, and lets anyone see wh
 - [ ] Optional input: pot, villain bet, call amount, effective stack
 
 ### Advice Engine (`feature/advice-engine`)
-- [ ] Advice engine v1: rule-based action suggestion
-- [ ] Advice output: action + 3-5 bullet point rationale
-- [ ] Bet sizing suggestions (% of pot)
-- [ ] Unit tests for advice engine
+- [x] Advice engine v1: rule-based action suggestion
+  - branch: `feature/advice-engine`
+  - session: `claude-opus-session-2`
+  - completed: `2026-02-14`
+- [x] Advice output: action + 3-5 bullet point rationale
+- [x] Bet sizing suggestions (% of pot)
+- [x] Unit tests for advice engine (38 tests)
 
 ### Integration (`feature/streamlit-integration`)
 - [ ] 把 advice engine 接進 Streamlit UI

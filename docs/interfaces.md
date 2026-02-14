@@ -224,23 +224,56 @@ def hand_distribution(
 
 ---
 
-## advisor（POC-3，尚未實作）
+## advisor
 
-> 預計介面：
+### `get_advice(hero_cards, board_cards, pot=None, call_amount=None, mc_iters=None, seed=None) -> Dict`
 
-### `get_advice(hero_cards, board_cards, pot=None, call_amount=None) -> Dict`
+```python
+def get_advice(
+    hero_cards: List[Card],     # 恰好 2 張
+    board_cards: List[Card],    # 0, 3, 4, 或 5 張
+    pot: Optional[float],       # 底池大小（可選）
+    call_amount: Optional[float], # 跟注金額（可選）
+    mc_iters: Optional[int],    # MC 迭代次數（傳給 equity_vs_random）
+    seed: Optional[int],        # 亂數種子（reproducibility）
+) -> Dict
+```
 
-**預計 Output format:**
+> **與預計介面的差異：** 新增了 `mc_iters` 和 `seed` 參數，用於控制 equity 計算的精度和重現性。非 breaking change（新增可選參數）。
+
+**Output format:**
 ```python
 {
     "action": str,             # "fold" / "call" / "raise"
     "confidence": str,         # "strong" / "moderate" / "marginal"
-    "rationale": List[str],    # 3-5 bullet points
-    "bet_sizing": Optional[float],  # raise 時建議的 bet size (% of pot)
+    "rationale": List[str],    # 2-5 bullet points（equity summary + draw info + pot odds + decision reason）
+    "bet_sizing": Optional[float],  # raise 時建議的 bet size（pot 的比例，0.50-1.0）；fold/call 時為 None
 }
 ```
 
-> **注意：** 這是預計介面，實作時可能調整。調整後必須更新此文件。
+**Decision rules（v1 heuristic）：**
+
+| Rule | Condition | Action | Confidence |
+|------|-----------|--------|------------|
+| 1 | equity ≥ 70% | raise | strong |
+| 2 | equity 55-70% | raise | moderate |
+| 3 | equity 35-55%, outs ≥ 4, +EV | call | moderate |
+| 3b | equity 35-55%, outs ≥ 4, −EV | fold | marginal |
+| 4 | equity 35-55%, no draws, +EV | call | marginal |
+| 4b | equity 35-55%, no draws, −EV | fold | marginal |
+| 5 | equity < 35%, outs ≥ 8, +EV | call | marginal |
+| 5b | equity < 35%, otherwise | fold | strong |
+
+**Bet sizing（raise 時）：**
+
+| Equity | Sizing (fraction of pot) |
+|--------|--------------------------|
+| ≥ 80% | 1.0 (pot-sized) |
+| 70-80% | 0.75 (3/4 pot) |
+| 60-70% | 0.66 (2/3 pot) |
+| < 60% | 0.50 (1/2 pot) |
+
+**使用方：** streamlit UI
 
 ---
 
@@ -249,3 +282,4 @@ def hand_distribution(
 | 日期 | 模組 | 變更 | Breaking? |
 |------|------|------|-----------|
 | 2026-02-14 | all | 初始版本：記錄所有已完成模組的公開 API | — |
+| 2026-02-14 | advisor | 實作 get_advice v1：新增 mc_iters/seed 參數（相對預計介面） | No（新增可選參數） |
