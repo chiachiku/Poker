@@ -62,46 +62,62 @@ This prevents two sessions from working on the same task, and lets anyone see wh
 
 ## POC-3: UI + Advice
 
-- [ ] Streamlit app: card input (text-based)
-- [ ] Display: equity, outs, distribution
+### Streamlit UI (`feature/streamlit-ui`)
+- [ ] Streamlit app 骨架: card input (text-based)
+- [ ] Display: equity, outs, distribution (接 engine)
 - [ ] Optional input: pot, villain bet, call amount, effective stack
+
+### Advice Engine (`feature/advice-engine`)
 - [ ] Advice engine v1: rule-based action suggestion
 - [ ] Advice output: action + 3-5 bullet point rationale
 - [ ] Bet sizing suggestions (% of pot)
+- [ ] Unit tests for advice engine
+
+### Integration (`feature/streamlit-integration`)
+- [ ] 把 advice engine 接進 Streamlit UI
+- [ ] End-to-end 測試
+
+### Remaining POC-1
+- [ ] Cross-check 5+ scenarios against known poker calculators (`feature/cli-verify`)
 
 ---
 
-## Parallel Work Plan
+## Parallel Work Plan (POC-3)
+
+> 完整規則見 `CLAUDE.md` → Parallel Work Protocol
+> 模組介面見 `docs/interfaces.md`
 
 ### Dependency graph
 ```
-Data Models ✅
-  ├── Hand Evaluator        ← 關鍵路徑, 必須先做
-  │     └── Equity Calculator
-  │           └── CLI Verification
+POC-1 ✅  POC-2 ✅
+  │         │
+  ├─────────┤
+  │         │
+  ▼         ▼
+Streamlit UI ◄──────── 不依賴 advisor，可以先用 placeholder
   │
-  ├── Outs detection (POC-2) ← 只依賴 models + evaluator, 可在 evaluator 完成後立即開始
-  │
-  └── Streamlit UI 骨架 (POC-3) ← 純 UI, 不依賴 engine, 可提前搭
+  │    Advice Engine ◄─ 依賴 equity + outs（已完成）
+  │         │
+  ▼         ▼
+Streamlit Integration ◄── 需要 UI + advice 都完成
 ```
 
-### What can run in parallel (by session/branch)
+### What can run in parallel NOW
 
 | Branch | Work | Depends on | Can start |
 |--------|------|------------|-----------|
-| `feature/evaluator` | Hand Evaluator + tests | Data Models ✅ | **NOW** |
-| `feature/ui-skeleton` | Streamlit 空殼 (card input UI, placeholder output) | Data Models ✅ | **NOW** |
-| `feature/equity` | Equity Calculator + tests | evaluator merged | After evaluator |
-| `feature/outs` | Outs detection + tests | evaluator merged | After evaluator |
-| `feature/cli` | CLI script | equity merged | After equity |
-| `feature/advice` | Advice engine | equity + outs merged | After both |
+| `feature/streamlit-ui` | Streamlit 骨架 + card input + 顯示 | models + engine ✅ | **NOW** |
+| `feature/advice-engine` | Advice engine v1 (rule-based) | equity + outs ✅ | **NOW** |
+| `feature/cli-verify` | CLI cross-check vs known calculators | CLI script ✅ | **NOW** |
+| `feature/streamlit-integration` | 把 advice engine 接進 UI | ui + advice merged | After both |
 
 ### Rules
-1. **One task per session** — each session claims a task by marking `[~]` with branch/session/started
-2. **Check todo.md before starting** — if someone else is `[~]` on it, pick another task
-3. **Branch per feature** — never work directly on `main`
-4. **Merge to main after tests pass** — PR or local merge, then mark `[x]`
-5. **Update todo.md in your branch** — merge conflicts in todo.md are expected, resolve manually
+1. **One task per session** — 認領時在 todo.md 標 `[~]` + branch/session/started
+2. **Check todo.md first** — 有人 `[~]` 就換一個做
+3. **Branch per feature** — 不直接改 `main`
+4. **Merge after tests pass** — 測試通過才 merge，然後標 `[x]`
+5. **Update interfaces** — 改了公開 API → 更新 `docs/interfaces.md`
+6. **Breaking change** — 在 `docs/interfaces.md` 標 `⚠️ BREAKING`，commit message 加 `BREAKING:`
 
 ---
 
