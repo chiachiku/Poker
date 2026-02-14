@@ -349,8 +349,8 @@ if st.session_state.current_street in ['flop', 'turn', 'river'] and hero_count =
     st.markdown("---")
     st.header("🃏 Step 2: Flop (3 cards)")
 
-    # Track flop cards separately
-    flop_count = len([c for c in st.session_state.board_cards_selected if c not in st.session_state.get('turn_card', []) and c not in st.session_state.get('river_card', [])])
+    # Track flop cards (use board_cards_selected length directly)
+    flop_count = len(st.session_state.board_cards_selected)
 
     if flop_count < 3:
         st.info(f"Select {3 - flop_count} more card(s) for the flop")
