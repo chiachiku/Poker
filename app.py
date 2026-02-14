@@ -37,14 +37,6 @@ def init_card_picker_state():
         st.session_state.hero_cards_selected = []
     if 'board_cards_selected' not in st.session_state:
         st.session_state.board_cards_selected = []
-    if 'current_street' not in st.session_state:
-        st.session_state.current_street = 'preflop'  # preflop, flop, turn, river
-    if 'flop_cards' not in st.session_state:
-        st.session_state.flop_cards = []
-    if 'turn_card' not in st.session_state:
-        st.session_state.turn_card = None
-    if 'river_card' not in st.session_state:
-        st.session_state.river_card = None
 
 # Initialize card picker state
 init_card_picker_state()
@@ -294,38 +286,40 @@ def validate_cards(hero_text: str, board_text: str):
 
 
 # ──────────────────────────────────────────────
-# Main content - Progressive Game Flow
+# Main content - Simplified Card Selection
 # ──────────────────────────────────────────────
 
-# Step 1: Select Hero Cards (Preflop)
-st.header("🎴 Step 1: Your Hole Cards")
-render_card_grid('hero', max_cards=2)
+# Card Selection Section
+st.header("🎴 Select Cards")
 
-# Auto-analyze when hero cards are selected
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Your Hole Cards (2)")
+    render_card_grid('hero', max_cards=2)
+
+# Get current selections
 hero_count = len(st.session_state.hero_cards_selected)
-if hero_count == 2:
-    st.success(f"✅ Selected: {' '.join(st.session_state.hero_cards_selected)}")
+board_count = len(st.session_state.board_cards_selected)
 
-    # Preflop Analysis
+# Show preflop analysis when hero cards selected (middle section)
+if hero_count == 2:
+    hero_cards = parse_cards(cards_selected_to_text('hero'))
+
     st.markdown("---")
     st.subheader("📊 Preflop Analysis")
 
-    hero_cards = parse_cards(cards_selected_to_text('hero'))
-    board_cards = []
-
     with st.spinner("Calculating preflop equity..."):
-        equity_result = equity_vs_random(hero_cards, board_cards, mc_iters=5000, seed=42)
+        equity_result = equity_vs_random(hero_cards, [], mc_iters=5000, seed=42)
         equity = equity_result['win'] + equity_result['tie'] / 2
+        advice = get_advice(hero_cards, [], pot=None, call_amount=None, seed=42)
 
-        advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
-
-    col1, col2 = st.columns(2)
-    with col1:
+    col_a, col_b = st.columns(2)
+    with col_a:
         st.metric("Equity vs Random", f"{equity*100:.1f}%")
         win_pct = equity_result['win'] * 100
         st.caption(f"Win: {win_pct:.1f}% | Tie: {equity_result['tie']*100:.1f}% | Lose: {equity_result['lose']*100:.1f}%")
-
-    with col2:
+    with col_b:
         action = advice['action'].upper()
         action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
         st.markdown(f"### {action_icon} {action}")
@@ -335,173 +329,132 @@ if hero_count == 2:
     for point in advice['rationale']:
         st.markdown(f"- {point}")
 
-    # Next step button
-    st.markdown("---")
-    if st.button("🃏 Deal Flop (3 cards)", type="primary", use_container_width=True):
-        st.session_state.current_street = 'flop'
-        st.rerun()
-
 elif hero_count < 2:
-    st.info(f"👆 Select {2 - hero_count} more card(s) to continue")
+    st.info(f"👆 Select {2 - hero_count} more hole card(s) to start analysis")
 
-# Step 2: Flop (only show if preflop complete)
-if st.session_state.current_street in ['flop', 'turn', 'river'] and hero_count == 2:
+# Board card selection (right column, after preflop analysis)
+with col2:
+    st.subheader("Board Cards (0-5)")
+    render_card_grid('board', max_cards=5)
+
+# Flop Analysis (when 3+ board cards selected)
+if hero_count == 2 and board_count >= 3:
+    board_cards = parse_cards(cards_selected_to_text('board'))[:3]
+
     st.markdown("---")
-    st.header("🃏 Step 2: Flop (3 cards)")
+    st.subheader("📊 Flop Analysis")
+    st.success(f"✅ Flop: {' '.join([repr(c) for c in board_cards])}")
 
-    # Track flop cards (use board_cards_selected length directly)
-    flop_count = len(st.session_state.board_cards_selected)
+    with st.spinner("Calculating flop equity..."):
+        equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
+        equity = equity_result['win'] + equity_result['tie'] / 2
+        draws = detect_draws(hero_cards, board_cards)
+        advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
 
-    if flop_count < 3:
-        st.info(f"Select {3 - flop_count} more card(s) for the flop")
-        # Continue showing card grid for board cards
-        if flop_count == 0:
-            render_card_grid('board', max_cards=3)
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.metric("Equity", f"{equity*100:.1f}%")
+    with col_b:
+        st.metric("Outs", draws['total_outs'])
+    with col_c:
+        action = advice['action'].upper()
+        action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
+        st.markdown(f"### {action_icon} {action}")
 
-    if len(st.session_state.board_cards_selected) >= 3:
-        board_text = cards_selected_to_text('board')
-        board_cards = parse_cards(board_text)[:3]  # Only first 3 cards
+    st.markdown("**Rationale:**")
+    for point in advice['rationale']:
+        st.markdown(f"- {point}")
 
-        st.success(f"✅ Flop: {' '.join([repr(c) for c in board_cards])}")
+# Turn Analysis (when 4+ board cards selected)
+if hero_count == 2 and board_count >= 4:
+    board_cards = parse_cards(cards_selected_to_text('board'))[:4]
 
-        # Flop Analysis
-        st.subheader("📊 Flop Analysis")
-        with st.spinner("Calculating flop equity..."):
-            equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
-            equity = equity_result['win'] + equity_result['tie'] / 2
-            draws = detect_draws(hero_cards, board_cards)
-            advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Equity", f"{equity*100:.1f}%")
-        with col2:
-            st.metric("Outs", draws['total_outs'])
-        with col3:
-            action = advice['action'].upper()
-            action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
-            st.markdown(f"### {action_icon} {action}")
-
-        # Next step
-        st.markdown("---")
-        if st.session_state.current_street == 'flop':
-            if st.button("🃏 Deal Turn (1 card)", type="primary", use_container_width=True):
-                st.session_state.current_street = 'turn'
-                st.rerun()
-
-# Step 3: Turn
-if st.session_state.current_street in ['turn', 'river'] and len(st.session_state.board_cards_selected) >= 3:
     st.markdown("---")
-    st.header("🃏 Step 3: Turn (1 card)")
+    st.subheader("📊 Turn Analysis")
+    st.success(f"✅ Turn: {repr(board_cards[3])}")
 
-    if len(st.session_state.board_cards_selected) < 4:
-        st.info("Select 1 more card for the turn")
-        render_card_grid('board', max_cards=4)
+    with st.spinner("Calculating turn equity..."):
+        equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
+        equity = equity_result['win'] + equity_result['tie'] / 2
+        draws = detect_draws(hero_cards, board_cards)
+        advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
 
-    if len(st.session_state.board_cards_selected) >= 4:
-        board_cards = parse_cards(cards_selected_to_text('board'))[:4]
-        st.success(f"✅ Turn: {repr(board_cards[3])}")
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.metric("Equity", f"{equity*100:.1f}%")
+    with col_b:
+        st.metric("Outs", draws['total_outs'])
+    with col_c:
+        action = advice['action'].upper()
+        action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
+        st.markdown(f"### {action_icon} {action}")
 
-        # Turn Analysis
-        st.subheader("📊 Turn Analysis")
-        with st.spinner("Calculating turn equity..."):
-            equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
-            equity = equity_result['win'] + equity_result['tie'] / 2
-            draws = detect_draws(hero_cards, board_cards)
-            advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
+    st.markdown("**Rationale:**")
+    for point in advice['rationale']:
+        st.markdown(f"- {point}")
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Equity", f"{equity*100:.1f}%")
-        with col2:
-            st.metric("Outs", draws['total_outs'])
-        with col3:
-            action = advice['action'].upper()
-            action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
-            st.markdown(f"### {action_icon} {action}")
+# River Analysis (when 5 board cards selected)
+if hero_count == 2 and board_count == 5:
+    board_cards = parse_cards(cards_selected_to_text('board'))
 
-        # Next step
-        st.markdown("---")
-        if st.session_state.current_street == 'turn':
-            if st.button("🃏 Deal River (1 card)", type="primary", use_container_width=True):
-                st.session_state.current_street = 'river'
-                st.rerun()
-
-# Step 4: River
-if st.session_state.current_street == 'river' and len(st.session_state.board_cards_selected) >= 4:
     st.markdown("---")
-    st.header("🃏 Step 4: River (1 card)")
+    st.subheader("📊 River Analysis")
+    st.success(f"✅ River: {repr(board_cards[4])}")
 
-    if len(st.session_state.board_cards_selected) < 5:
-        st.info("Select 1 more card for the river")
-        render_card_grid('board', max_cards=5)
+    with st.spinner("Calculating river equity..."):
+        equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
+        equity = equity_result['win'] + equity_result['tie'] / 2
+        dist = hand_distribution(hero_cards, board_cards, seed=42)
+        advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
 
-    if len(st.session_state.board_cards_selected) == 5:
-        board_cards = parse_cards(cards_selected_to_text('board'))
-        st.success(f"✅ River: {repr(board_cards[4])}")
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.metric("Total Equity", f"{equity*100:.1f}%")
+        win_pct = equity_result['win'] * 100
+        tie_pct = equity_result['tie'] * 100
+        lose_pct = equity_result['lose'] * 100
+        st.markdown(
+            f"- Win: **{win_pct:.1f}%**\n"
+            f"- Tie: **{tie_pct:.1f}%**\n"
+            f"- Lose: **{lose_pct:.1f}%**"
+        )
 
-        # River Analysis (Full)
-        st.subheader("📊 Final Analysis")
-        with st.spinner("Calculating final equity..."):
-            equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
-            equity = equity_result['win'] + equity_result['tie'] / 2
-            dist = hand_distribution(hero_cards, board_cards, seed=42)
-            advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
+    with col_b:
+        st.markdown("**Hand Distribution**")
+        dist_display = {
+            'straight_flush': 'Straight Flush',
+            'four_of_a_kind': 'Quads',
+            'full_house': 'Full House',
+            'flush': 'Flush',
+            'straight': 'Straight',
+            'three_of_a_kind': 'Trips',
+            'two_pair': 'Two Pair',
+            'one_pair': 'Pair',
+            'high_card': 'High Card',
+        }
+        shown = 0
+        for key, label in dist_display.items():
+            if key in dist and dist[key] > 0.001:
+                pct = dist[key] * 100
+                st.markdown(f"- {label}: {pct:.1f}%")
+                shown += 1
+                if shown >= 3:
+                    break
 
-        # Full results display
-        col1, col2, col3 = st.columns(3)
+    with col_c:
+        action = advice['action'].upper()
+        action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
+        st.markdown(f"### {action_icon} {action}")
+        st.caption(f"Confidence: {advice['confidence']}")
 
-        with col1:
-            st.metric("Total Equity", f"{equity*100:.1f}%")
-            win_pct = equity_result['win'] * 100
-            tie_pct = equity_result['tie'] * 100
-            lose_pct = equity_result['lose'] * 100
-            st.markdown(
-                f"- Win: **{win_pct:.1f}%**\n"
-                f"- Tie: **{tie_pct:.1f}%**\n"
-                f"- Lose: **{lose_pct:.1f}%**"
-            )
-
-        with col2:
-            st.markdown("**Hand Distribution**")
-            dist_display = {
-                'straight_flush': 'Straight Flush',
-                'four_of_a_kind': 'Quads',
-                'full_house': 'Full House',
-                'flush': 'Flush',
-                'straight': 'Straight',
-                'three_of_a_kind': 'Trips',
-                'two_pair': 'Two Pair',
-                'one_pair': 'Pair',
-                'high_card': 'High Card',
-            }
-            shown = 0
-            for key, label in dist_display.items():
-                if key in dist and dist[key] > 0.001:
-                    pct = dist[key] * 100
-                    st.markdown(f"- {label}: {pct:.1f}%")
-                    shown += 1
-                    if shown >= 3:
-                        break
-
-        with col3:
-            action = advice['action'].upper()
-            action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
-            st.markdown(f"### {action_icon} {action}")
-            st.caption(f"Confidence: {advice['confidence']}")
-
-        st.markdown("**Rationale:**")
-        for point in advice['rationale']:
-            st.markdown(f"- {point}")
+    st.markdown("**Rationale:**")
+    for point in advice['rationale']:
+        st.markdown(f"- {point}")
 
 # Reset button (always visible at bottom)
 st.markdown("---")
 if st.button("🔄 New Hand", use_container_width=True):
     st.session_state.hero_cards_selected = []
     st.session_state.board_cards_selected = []
-    st.session_state.current_street = 'preflop'
-    st.session_state.flop_cards = []
-    st.session_state.turn_card = None
-    st.session_state.river_card = None
     st.rerun()
 
