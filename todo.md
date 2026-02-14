@@ -50,12 +50,13 @@ This prevents two sessions from working on the same task, and lets anyone see wh
 
 ## POC-2: Outs & Odds
 
-- [ ] Flush draw detection + out count
-- [ ] Straight draw detection (OESD vs gutshot) + out count
-- [ ] Hand type distribution across all runouts
-- [ ] Pot odds calculation (callAmount / (pot + callAmount))
-- [ ] EV(call) calculation
-- [ ] Unit tests for all above
+- [x] Flush draw detection + out count (9 outs, hero participation check)
+- [x] Straight draw detection (OESD vs gutshot) + out count
+- [x] Combined draw deduplication (flush+straight outs merged)
+- [x] Hand type distribution across all runouts (exact turn, MC flop/preflop)
+- [x] Pot odds calculation (callAmount / (pot + callAmount))
+- [x] EV(call) calculation + should_call decision helper
+- [x] Unit tests: 46 tests (outs, odds, distribution)
 
 ---
 
