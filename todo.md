@@ -63,9 +63,12 @@ This prevents two sessions from working on the same task, and lets anyone see wh
 ## POC-3: UI + Advice
 
 ### Streamlit UI (`feature/streamlit-ui`)
-- [ ] Streamlit app 骨架: card input (text-based)
-- [ ] Display: equity, outs, distribution (接 engine)
-- [ ] Optional input: pot, villain bet, call amount, effective stack
+- [x] Streamlit app 骨架 + card input + display + advice integration
+  - branch: `feature/streamlit-ui`
+  - session: `claude-opus-session-2`
+  - completed: `2026-02-14`
+- [x] Display: equity, outs, distribution (接 engine)
+- [x] Optional input: pot, villain bet, call amount, effective stack
 
 ### Advice Engine (`feature/advice-engine`)
 - [x] Advice engine v1: rule-based action suggestion
@@ -77,7 +80,7 @@ This prevents two sessions from working on the same task, and lets anyone see wh
 - [x] Unit tests for advice engine (38 tests)
 
 ### Integration (`feature/streamlit-integration`)
-- [ ] 把 advice engine 接進 Streamlit UI
+- [x] 把 advice engine 接進 Streamlit UI（included in streamlit-ui branch）
 - [ ] End-to-end 測試
 
 ### Remaining POC-1
