@@ -45,6 +45,115 @@ def parse_cards(text: str) -> list:
     return cards
 
 
+# ──────────────────────────────────────────────
+# Card Grid Picker Functions
+# ──────────────────────────────────────────────
+
+def init_card_picker_state():
+    """Initialize session state for card picker."""
+    if 'hero_cards_selected' not in st.session_state:
+        st.session_state.hero_cards_selected = []
+    if 'board_cards_selected' not in st.session_state:
+        st.session_state.board_cards_selected = []
+
+
+def get_all_selected_cards() -> set:
+    """Return set of all selected cards (hero + board)."""
+    return set(
+        st.session_state.hero_cards_selected +
+        st.session_state.board_cards_selected
+    )
+
+
+def render_card_button(card_str: str, context: str, max_cards: int):
+    """Render a single card button with selection logic.
+
+    Args:
+        card_str: Card string like 'Ah', 'Kd'
+        context: 'hero' or 'board'
+        max_cards: Maximum cards allowed (2 for hero, 5 for board)
+    """
+    all_selected = get_all_selected_cards()
+    context_key = f'{context}_cards_selected'
+    current_selected = st.session_state[context_key]
+
+    # Determine button state
+    is_selected_here = card_str in current_selected
+    is_selected_elsewhere = card_str in all_selected and not is_selected_here
+    at_max = len(current_selected) >= max_cards
+
+    disabled = is_selected_elsewhere or (at_max and not is_selected_here)
+    button_type = 'primary' if is_selected_here else 'secondary'
+    label = f"✓{card_str[0]}" if is_selected_here else card_str[0]
+
+    # Render button
+    if st.button(
+        label,
+        key=f"card_{context}_{card_str}",
+        disabled=disabled,
+        type=button_type,
+        use_container_width=True
+    ):
+        # Toggle selection
+        if is_selected_here:
+            current_selected.remove(card_str)
+        else:
+            current_selected.append(card_str)
+        st.rerun()
+
+
+def render_card_grid(context: str, max_cards: int):
+    """Render 52-card grid for selection.
+
+    Args:
+        context: 'hero' or 'board'
+        max_cards: Maximum cards allowed (2 or 5)
+    """
+    SUITS = ['h', 'd', 'c', 's']
+    SUIT_SYMBOLS = {'h': '♥', 'd': '♦', 'c': '♣', 's': '♠'}
+    SUIT_COLORS = {'h': 'red', 'd': 'red', 'c': 'black', 's': 'black'}
+    RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
+
+    current_count = len(st.session_state[f'{context}_cards_selected'])
+    st.caption(f"({current_count}/{max_cards} selected)")
+
+    for suit in SUITS:
+        suit_symbol = SUIT_SYMBOLS[suit]
+        suit_color = SUIT_COLORS[suit]
+
+        # Row header with colored suit symbol
+        col_label, *cols = st.columns([1, *([1]*13)])
+        with col_label:
+            st.markdown(
+                f"<div style='text-align:center;font-size:18px;color:{suit_color};'>{suit_symbol}</div>",
+                unsafe_allow_html=True
+            )
+
+        # Render 13 card buttons for this suit
+        for idx, rank_char in enumerate(RANKS):
+            card_str = f"{rank_char}{suit}"
+            with cols[idx]:
+                render_card_button(card_str, context, max_cards)
+
+    # Show selected cards preview
+    selected = st.session_state[f'{context}_cards_selected']
+    if selected:
+        preview = " ".join(selected)
+        st.markdown(f"**Selected:** `{preview}`")
+
+
+def cards_selected_to_text(context: str) -> str:
+    """Convert selected cards to text format for validation.
+
+    Args:
+        context: 'hero' or 'board'
+
+    Returns:
+        Space-separated card string, e.g., "Ah Kd"
+    """
+    return " ".join(st.session_state[f'{context}_cards_selected'])
+
+
 def validate_cards(hero_text: str, board_text: str):
     """Validate card inputs. Returns (hero_cards, board_cards, error_msg)."""
     try:
@@ -72,32 +181,37 @@ def validate_cards(hero_text: str, board_text: str):
     return hero, board, None
 
 
+# Initialize card picker state
+init_card_picker_state()
+
 # ──────────────────────────────────────────────
 # Sidebar: inputs
 # ──────────────────────────────────────────────
 
 with st.sidebar:
-    st.header("Card Input")
-    st.markdown(
-        "**Format:** Rank + Suit  \n"
-        "Ranks: `2 3 4 5 6 7 8 9 T J Q K A`  \n"
-        "Suits: `h` ♥ `d` ♦ `c` ♣ `s` ♠  \n"
-        "Example: `Ah Kd` = A♥ K♦"
-    )
+    st.header("🃏 Select Cards")
 
-    hero_text = st.text_input(
-        "Your hole cards (2 cards)",
-        value="",
-        placeholder="e.g. Ah Kd",
-    )
-
-    board_text = st.text_input(
-        "Community cards (0, 3, 4, or 5)",
-        value="",
-        placeholder="e.g. Qh Jc Tc",
-    )
+    # ── Hero Cards Grid ────
+    st.markdown("### Hero Cards")
+    render_card_grid('hero', max_cards=2)
 
     st.divider()
+
+    # ── Board Cards Grid ────
+    st.markdown("### Board Cards")
+    render_card_grid('board', max_cards=5)
+
+    st.divider()
+
+    # ── Clear All Button ────
+    if st.button("🗑️ Clear All Cards", use_container_width=True):
+        st.session_state.hero_cards_selected = []
+        st.session_state.board_cards_selected = []
+        st.rerun()
+
+    st.divider()
+
+    # ── Pot & Bet (unchanged) ────
     st.header("Pot & Bet (optional)")
 
     pot_size = st.number_input(
@@ -125,8 +239,12 @@ with st.sidebar:
 # ──────────────────────────────────────────────
 
 if not analyze_btn:
-    st.info("Enter your hole cards and community cards in the sidebar, then click **Analyze**.")
+    st.info("Select your hole cards and community cards in the sidebar, then click **Analyze**.")
     st.stop()
+
+# Convert grid selections to text format for validation
+hero_text = cards_selected_to_text('hero')
+board_text = cards_selected_to_text('board')
 
 # Validate
 hero_cards, board_cards, error = validate_cards(hero_text, board_text)
