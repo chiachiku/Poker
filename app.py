@@ -37,6 +37,14 @@ def init_card_picker_state():
         st.session_state.hero_cards_selected = []
     if 'board_cards_selected' not in st.session_state:
         st.session_state.board_cards_selected = []
+    if 'current_street' not in st.session_state:
+        st.session_state.current_street = 'preflop'  # preflop, flop, turn, river
+    if 'flop_cards' not in st.session_state:
+        st.session_state.flop_cards = []
+    if 'turn_card' not in st.session_state:
+        st.session_state.turn_card = None
+    if 'river_card' not in st.session_state:
+        st.session_state.river_card = None
 
 # Initialize card picker state
 init_card_picker_state()
@@ -67,6 +75,38 @@ def get_all_selected_cards() -> set:
     )
 
 
+def get_card_display_info(card_str: str) -> dict:
+    """Get display information for a card.
+
+    Args:
+        card_str: Card string like 'Ah', 'Kd', 'Tc'
+
+    Returns:
+        Dict with rank_display, suit_symbol, and suit_color
+    """
+    rank = card_str[0].upper()
+    suit = card_str[1].lower()
+
+    # Rank display (10 instead of T for clarity)
+    rank_display = '10' if rank == 'T' else rank
+
+    # Suit symbols and colors
+    SUIT_INFO = {
+        'h': {'symbol': '♥', 'color': '#dc3545'},  # Red hearts
+        'd': {'symbol': '♦', 'color': '#dc3545'},  # Red diamonds
+        'c': {'symbol': '♣', 'color': '#212529'},  # Black clubs
+        's': {'symbol': '♠', 'color': '#212529'},  # Black spades
+    }
+
+    suit_info = SUIT_INFO[suit]
+
+    return {
+        'rank_display': rank_display,
+        'suit_symbol': suit_info['symbol'],
+        'suit_color': suit_info['color']
+    }
+
+
 def render_card_button(card_str: str, context: str, max_cards: int):
     """Render a single card button with selection logic.
 
@@ -84,22 +124,92 @@ def render_card_button(card_str: str, context: str, max_cards: int):
     is_selected_elsewhere = card_str in all_selected and not is_selected_here
     at_max = len(current_selected) >= max_cards
 
-    disabled = is_selected_elsewhere or (at_max and not is_selected_here)
-    button_type = 'primary' if is_selected_here else 'secondary'
-    label = f"✓{card_str[0]}" if is_selected_here else card_str[0]
+    # Only disable if selected in another context (hero/board)
+    disabled = is_selected_elsewhere
 
-    # Render button
+    # Get card display info
+    card_info = get_card_display_info(card_str)
+    rank = card_info['rank_display']
+    suit_symbol = card_info['suit_symbol']
+    suit_color = card_info['suit_color']
+
+    # Determine styling based on state
+    if is_selected_here:
+        border = '4px solid #28a745'
+        bg_color = '#d4edda'
+        shadow = '0 4px 8px rgba(40, 167, 69, 0.3)'
+        opacity = '1.0'
+        cursor = 'pointer'
+    elif disabled:
+        border = '2px solid #dee2e6'
+        bg_color = '#f1f3f5'
+        shadow = 'none'
+        opacity = '0.4'
+        cursor = 'not-allowed'
+    else:
+        border = '2px solid #ced4da'
+        bg_color = '#ffffff'
+        shadow = '0 2px 4px rgba(0,0,0,0.1)'
+        opacity = '1.0'
+        cursor = 'pointer'
+
+    # Button key and label (no checkmark, color shows selection)
+    button_key = f"card_{context}_{card_str}"
+    button_label = f"{rank}\n{suit_symbol}"
+
+    # Style button to look like card
+    st.markdown(f"""
+    <style>
+        button[data-testid="baseButton"][key*="{button_key}"] {{
+            background: {bg_color} !important;
+            border: {border} !important;
+            border-radius: 8px !important;
+            box-shadow: {shadow} !important;
+            opacity: {opacity} !important;
+            transition: all 0.2s ease !important;
+            padding: 8px !important;
+            min-height: 80px !important;
+            color: {suit_color} !important;
+            font-size: 24px !important;
+            font-weight: bold !important;
+            white-space: pre-line !important;
+            cursor: {cursor} !important;
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+
     if st.button(
-        label,
-        key=f"card_{context}_{card_str}",
+        button_label,
+        key=button_key,
         disabled=disabled,
-        type=button_type,
+        type='primary' if is_selected_here else 'secondary',
         use_container_width=True
     ):
-        # Toggle selection
+        # Smart selection logic
         if is_selected_here:
+            # Deselect if already selected
             current_selected.remove(card_str)
+        elif at_max:
+            # At max capacity - use smart replacement
+            suit = card_str[1].lower()
+
+            # Check if same suit already selected
+            same_suit_card = None
+            for c in current_selected:
+                if c[1].lower() == suit:
+                    same_suit_card = c
+                    break
+
+            if same_suit_card:
+                # Replace same suit card
+                current_selected.remove(same_suit_card)
+                current_selected.append(card_str)
+            else:
+                # Replace oldest card (first in list)
+                current_selected.pop(0)
+                current_selected.append(card_str)
         else:
+            # Normal selection
             current_selected.append(card_str)
         st.rerun()
 
@@ -184,213 +294,214 @@ def validate_cards(hero_text: str, board_text: str):
 
 
 # ──────────────────────────────────────────────
-# Sidebar: inputs
+# Main content - Progressive Game Flow
 # ──────────────────────────────────────────────
 
-with st.sidebar:
-    st.header("🃏 Select Cards")
+# Step 1: Select Hero Cards (Preflop)
+st.header("🎴 Step 1: Your Hole Cards")
+render_card_grid('hero', max_cards=2)
 
-    # ── Hero Cards Grid ────
-    st.markdown("### Hero Cards")
-    render_card_grid('hero', max_cards=2)
+# Auto-analyze when hero cards are selected
+hero_count = len(st.session_state.hero_cards_selected)
+if hero_count == 2:
+    st.success(f"✅ Selected: {' '.join(st.session_state.hero_cards_selected)}")
 
-    st.divider()
+    # Preflop Analysis
+    st.markdown("---")
+    st.subheader("📊 Preflop Analysis")
 
-    # ── Board Cards Grid ────
-    st.markdown("### Board Cards")
-    render_card_grid('board', max_cards=5)
+    hero_cards = parse_cards(cards_selected_to_text('hero'))
+    board_cards = []
 
-    st.divider()
+    with st.spinner("Calculating preflop equity..."):
+        equity_result = equity_vs_random(hero_cards, board_cards, mc_iters=5000, seed=42)
+        equity = equity_result['win'] + equity_result['tie'] / 2
 
-    # ── Clear All Button ────
-    if st.button("🗑️ Clear All Cards", use_container_width=True):
-        st.session_state.hero_cards_selected = []
-        st.session_state.board_cards_selected = []
-        st.rerun()
+        advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
 
-    st.divider()
-    st.header("Pot & Bet (optional)")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Equity vs Random", f"{equity*100:.1f}%")
+        win_pct = equity_result['win'] * 100
+        st.caption(f"Win: {win_pct:.1f}% | Tie: {equity_result['tie']*100:.1f}% | Lose: {equity_result['lose']*100:.1f}%")
 
-    pot_size = st.number_input(
-        "Pot size",
-        min_value=0.0,
-        value=0.0,
-        step=10.0,
-        format="%.1f",
-    )
+    with col2:
+        action = advice['action'].upper()
+        action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
+        st.markdown(f"### {action_icon} {action}")
+        st.caption(f"Confidence: {advice['confidence']}")
 
-    call_amt = st.number_input(
-        "Call amount",
-        min_value=0.0,
-        value=0.0,
-        step=5.0,
-        format="%.1f",
-    )
-
-    st.divider()
-    analyze_btn = st.button("Analyze", type="primary", use_container_width=True)
-
-
-# ──────────────────────────────────────────────
-# Main content
-# ──────────────────────────────────────────────
-
-if not analyze_btn:
-    st.info("Select your hole cards and community cards in the sidebar, then click **Analyze**.")
-    st.stop()
-
-# Convert grid selections to text format for validation
-hero_text = cards_selected_to_text('hero')
-board_text = cards_selected_to_text('board')
-
-# Validate
-hero_cards, board_cards, error = validate_cards(hero_text, board_text)
-if error:
-    st.error(error)
-    st.stop()
-
-# Determine optional pot info
-pot_val = pot_size if pot_size > 0 else None
-call_val = call_amt if call_amt > 0 else None
-
-street_labels = {0: "Preflop", 3: "Flop", 4: "Turn", 5: "River"}
-street = street_labels.get(len(board_cards), "Unknown")
-
-# Display parsed cards
-hero_display = " ".join(repr(c) for c in hero_cards)
-board_display = " ".join(repr(c) for c in board_cards) if board_cards else "—"
-st.markdown(f"**Hero:** `{hero_display}` | **Board:** `{board_display}` | **Street:** {street}")
-st.divider()
-
-# ──── Compute everything ────
-
-with st.spinner("Calculating..."):
-    # Equity
-    equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
-    equity = equity_result['win'] + equity_result['tie'] / 2
-
-    # Outs (only meaningful on flop/turn)
-    draws = detect_draws(hero_cards, board_cards)
-
-    # Distribution
-    dist = hand_distribution(hero_cards, board_cards, seed=42)
-
-    # Advice
-    advice = get_advice(
-        hero_cards, board_cards,
-        pot=pot_val, call_amount=call_val,
-        seed=42,
-    )
-
-    # Pot odds (if applicable)
-    po_info = None
-    if pot_val and call_val and call_val > 0:
-        po = pot_odds(pot_val, call_val)
-        ev = ev_call(pot_val, call_val, equity)
-        po_info = {'pot_odds': po, 'ev': ev}
-
-
-# ──────────────────────────────────────────────
-# Layout: 3 columns
-# ──────────────────────────────────────────────
-
-col1, col2, col3 = st.columns(3)
-
-# ──── Column 1: Equity ────
-with col1:
-    st.subheader("Equity")
-
-    eq_pct = equity * 100
-    win_pct = equity_result['win'] * 100
-    tie_pct = equity_result['tie'] * 100
-    lose_pct = equity_result['lose'] * 100
-
-    st.metric("Total Equity", f"{eq_pct:.1f}%")
-
-    st.markdown(
-        f"- Win: **{win_pct:.1f}%**\n"
-        f"- Tie: **{tie_pct:.1f}%**\n"
-        f"- Lose: **{lose_pct:.1f}%**"
-    )
-
-    # Pot odds section
-    if po_info:
-        st.divider()
-        st.markdown("**Pot Odds**")
-        po_pct = po_info['pot_odds'] * 100
-        ev_val = po_info['ev']
-        ev_color = "green" if ev_val > 0 else "red"
-        st.markdown(f"Need: **{po_pct:.1f}%** equity to call")
-        st.markdown(f"EV(call): **:{ev_color}[{ev_val:+.1f}]**")
-
-
-# ──── Column 2: Outs & Distribution ────
-with col2:
-    st.subheader("Draws & Outs")
-
-    if len(board_cards) in (3, 4):
-        total_outs = draws['total_outs']
-        st.metric("Total Outs", total_outs)
-
-        if draws['flush_draw']:
-            fd = draws['flush_draw']
-            st.markdown(f"- Flush draw: **{fd['outs']} outs**")
-
-        for sd in draws['straight_draws']:
-            label = "OESD" if sd['type'] == 'oesd' else "Gutshot"
-            st.markdown(f"- {label}: **{sd['outs']} outs**")
-
-        if total_outs == 0:
-            st.markdown("_No draws detected._")
-    else:
-        st.markdown("_Draws are shown on flop/turn only._")
-
-    st.divider()
-    st.subheader("Hand Distribution")
-
-    if dist:
-        # Show as a nice table
-        dist_display = {
-            'straight_flush': 'Straight Flush',
-            'four_of_a_kind': 'Four of a Kind',
-            'full_house': 'Full House',
-            'flush': 'Flush',
-            'straight': 'Straight',
-            'three_of_a_kind': 'Three of a Kind',
-            'two_pair': 'Two Pair',
-            'one_pair': 'One Pair',
-            'high_card': 'High Card',
-        }
-
-        for key, label in dist_display.items():
-            if key in dist:
-                pct = dist[key] * 100
-                st.markdown(f"- {label}: **{pct:.1f}%**")
-
-
-# ──── Column 3: Advice ────
-with col3:
-    st.subheader("Advice")
-
-    action = advice['action'].upper()
-    confidence = advice['confidence']
-
-    # Color-code the action
-    action_colors = {
-        'RAISE': '🟢',
-        'CALL': '🟡',
-        'FOLD': '🔴',
-    }
-    icon = action_colors.get(action, '')
-
-    st.markdown(f"### {icon} {action}")
-    st.markdown(f"Confidence: **{confidence}**")
-
-    if advice['bet_sizing'] is not None:
-        sizing_pct = advice['bet_sizing'] * 100
-        st.markdown(f"Suggested bet: **{sizing_pct:.0f}% of pot**")
-
-    st.divider()
     st.markdown("**Rationale:**")
     for point in advice['rationale']:
         st.markdown(f"- {point}")
+
+    # Next step button
+    st.markdown("---")
+    if st.button("🃏 Deal Flop (3 cards)", type="primary", use_container_width=True):
+        st.session_state.current_street = 'flop'
+        st.rerun()
+
+elif hero_count < 2:
+    st.info(f"👆 Select {2 - hero_count} more card(s) to continue")
+
+# Step 2: Flop (only show if preflop complete)
+if st.session_state.current_street in ['flop', 'turn', 'river'] and hero_count == 2:
+    st.markdown("---")
+    st.header("🃏 Step 2: Flop (3 cards)")
+
+    # Track flop cards separately
+    flop_count = len([c for c in st.session_state.board_cards_selected if c not in st.session_state.get('turn_card', []) and c not in st.session_state.get('river_card', [])])
+
+    if flop_count < 3:
+        st.info(f"Select {3 - flop_count} more card(s) for the flop")
+        # Continue showing card grid for board cards
+        if flop_count == 0:
+            render_card_grid('board', max_cards=3)
+
+    if len(st.session_state.board_cards_selected) >= 3:
+        board_text = cards_selected_to_text('board')
+        board_cards = parse_cards(board_text)[:3]  # Only first 3 cards
+
+        st.success(f"✅ Flop: {' '.join([repr(c) for c in board_cards])}")
+
+        # Flop Analysis
+        st.subheader("📊 Flop Analysis")
+        with st.spinner("Calculating flop equity..."):
+            equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
+            equity = equity_result['win'] + equity_result['tie'] / 2
+            draws = detect_draws(hero_cards, board_cards)
+            advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Equity", f"{equity*100:.1f}%")
+        with col2:
+            st.metric("Outs", draws['total_outs'])
+        with col3:
+            action = advice['action'].upper()
+            action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
+            st.markdown(f"### {action_icon} {action}")
+
+        # Next step
+        st.markdown("---")
+        if st.session_state.current_street == 'flop':
+            if st.button("🃏 Deal Turn (1 card)", type="primary", use_container_width=True):
+                st.session_state.current_street = 'turn'
+                st.rerun()
+
+# Step 3: Turn
+if st.session_state.current_street in ['turn', 'river'] and len(st.session_state.board_cards_selected) >= 3:
+    st.markdown("---")
+    st.header("🃏 Step 3: Turn (1 card)")
+
+    if len(st.session_state.board_cards_selected) < 4:
+        st.info("Select 1 more card for the turn")
+        render_card_grid('board', max_cards=4)
+
+    if len(st.session_state.board_cards_selected) >= 4:
+        board_cards = parse_cards(cards_selected_to_text('board'))[:4]
+        st.success(f"✅ Turn: {repr(board_cards[3])}")
+
+        # Turn Analysis
+        st.subheader("📊 Turn Analysis")
+        with st.spinner("Calculating turn equity..."):
+            equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
+            equity = equity_result['win'] + equity_result['tie'] / 2
+            draws = detect_draws(hero_cards, board_cards)
+            advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Equity", f"{equity*100:.1f}%")
+        with col2:
+            st.metric("Outs", draws['total_outs'])
+        with col3:
+            action = advice['action'].upper()
+            action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
+            st.markdown(f"### {action_icon} {action}")
+
+        # Next step
+        st.markdown("---")
+        if st.session_state.current_street == 'turn':
+            if st.button("🃏 Deal River (1 card)", type="primary", use_container_width=True):
+                st.session_state.current_street = 'river'
+                st.rerun()
+
+# Step 4: River
+if st.session_state.current_street == 'river' and len(st.session_state.board_cards_selected) >= 4:
+    st.markdown("---")
+    st.header("🃏 Step 4: River (1 card)")
+
+    if len(st.session_state.board_cards_selected) < 5:
+        st.info("Select 1 more card for the river")
+        render_card_grid('board', max_cards=5)
+
+    if len(st.session_state.board_cards_selected) == 5:
+        board_cards = parse_cards(cards_selected_to_text('board'))
+        st.success(f"✅ River: {repr(board_cards[4])}")
+
+        # River Analysis (Full)
+        st.subheader("📊 Final Analysis")
+        with st.spinner("Calculating final equity..."):
+            equity_result = equity_vs_random(hero_cards, board_cards, seed=42)
+            equity = equity_result['win'] + equity_result['tie'] / 2
+            dist = hand_distribution(hero_cards, board_cards, seed=42)
+            advice = get_advice(hero_cards, board_cards, pot=None, call_amount=None, seed=42)
+
+        # Full results display
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("Total Equity", f"{equity*100:.1f}%")
+            win_pct = equity_result['win'] * 100
+            tie_pct = equity_result['tie'] * 100
+            lose_pct = equity_result['lose'] * 100
+            st.markdown(
+                f"- Win: **{win_pct:.1f}%**\n"
+                f"- Tie: **{tie_pct:.1f}%**\n"
+                f"- Lose: **{lose_pct:.1f}%**"
+            )
+
+        with col2:
+            st.markdown("**Hand Distribution**")
+            dist_display = {
+                'straight_flush': 'Straight Flush',
+                'four_of_a_kind': 'Quads',
+                'full_house': 'Full House',
+                'flush': 'Flush',
+                'straight': 'Straight',
+                'three_of_a_kind': 'Trips',
+                'two_pair': 'Two Pair',
+                'one_pair': 'Pair',
+                'high_card': 'High Card',
+            }
+            shown = 0
+            for key, label in dist_display.items():
+                if key in dist and dist[key] > 0.001:
+                    pct = dist[key] * 100
+                    st.markdown(f"- {label}: {pct:.1f}%")
+                    shown += 1
+                    if shown >= 3:
+                        break
+
+        with col3:
+            action = advice['action'].upper()
+            action_icon = {'RAISE': '🟢', 'CALL': '🟡', 'FOLD': '🔴'}.get(action, '')
+            st.markdown(f"### {action_icon} {action}")
+            st.caption(f"Confidence: {advice['confidence']}")
+
+        st.markdown("**Rationale:**")
+        for point in advice['rationale']:
+            st.markdown(f"- {point}")
+
+# Reset button (always visible at bottom)
+st.markdown("---")
+if st.button("🔄 New Hand", use_container_width=True):
+    st.session_state.hero_cards_selected = []
+    st.session_state.board_cards_selected = []
+    st.session_state.current_street = 'preflop'
+    st.session_state.flop_cards = []
+    st.session_state.turn_card = None
+    st.session_state.river_card = None
+    st.rerun()
+
