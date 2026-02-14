@@ -88,34 +88,28 @@ This prevents two sessions from working on the same task, and lets anyone see wh
 
 ---
 
-## Parallel Work Plan (POC-3)
+## Parallel Work Plan
 
 > 完整規則見 `CLAUDE.md` → Parallel Work Protocol
 > 模組介面見 `docs/interfaces.md`
 
-### Dependency graph
+### 目前狀態：POC-3 接近完成
+
 ```
-POC-1 ✅  POC-2 ✅
-  │         │
-  ├─────────┤
-  │         │
-  ▼         ▼
-Streamlit UI ◄──────── 不依賴 advisor，可以先用 placeholder
-  │
-  │    Advice Engine ◄─ 依賴 equity + outs（已完成）
-  │         │
-  ▼         ▼
-Streamlit Integration ◄── 需要 UI + advice 都完成
+POC-1 ✅  POC-2 ✅  POC-3 Advice ✅  POC-3 UI ✅
+                                         │
+                              ┌──────────┤
+                              ▼          ▼
+                         E2E 測試    CLI 交叉驗證
+                           [ ]         [ ]
 ```
 
-### What can run in parallel NOW
+### 可認領的剩餘任務
 
-| Branch | Work | Depends on | Can start |
-|--------|------|------------|-----------|
-| `feature/streamlit-ui` | Streamlit 骨架 + card input + 顯示 | models + engine ✅ | **NOW** |
-| `feature/advice-engine` | Advice engine v1 (rule-based) | equity + outs ✅ | **NOW** |
-| `feature/cli-verify` | CLI cross-check vs known calculators | CLI script ✅ | **NOW** |
-| `feature/streamlit-integration` | 把 advice engine 接進 UI | ui + advice merged | After both |
+| Branch | Work | Can start |
+|--------|------|-----------|
+| `feature/cli-verify` | CLI cross-check 5+ scenarios vs known calculators | **NOW** |
+| `feature/e2e-tests` | End-to-end 測試 (Streamlit UI) | **NOW** |
 
 ### Rules
 1. **One task per session** — 認領時在 todo.md 標 `[~]` + branch/session/started

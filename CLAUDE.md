@@ -4,9 +4,9 @@
 
 A Texas Hold'em poker analysis tool. Core purpose: input your hole cards + community cards, get equity, outs, and actionable advice.
 
-## Current phase: POC-3
+## Current phase: POC-3 (nearly complete)
 
-POC-1 (calculation engine) and POC-2 (outs & odds) are **complete**. We are now building POC-3.
+POC-1, POC-2, and most of POC-3 are **complete**. 159 tests all passing.
 
 ### POC-1: Calculation engine (CLI) — COMPLETE
 - Card / Hand / Board data models
@@ -21,11 +21,12 @@ POC-1 (calculation engine) and POC-2 (outs & odds) are **complete**. We are now 
 - Pot odds / EV(call) calculation
 - 46 tests all passing
 
-### POC-3: Minimal UI + advice engine v1 — IN PROGRESS
-- Simple web interface (Streamlit, NOT React)
-- Input: hole cards, community cards, pot/bet amounts (optional)
-- Output: equity, outs, distribution, rule-based action advice
-- Advice engine v1: heuristic rules based on equity + outs + pot odds
+### POC-3: Minimal UI + advice engine v1 — NEARLY COMPLETE
+- Streamlit app (`app.py`): card input, equity/outs/distribution display, advice integration ✅
+- Advice engine v1 (`src/advisor/advisor.py`): rule-based action suggestions, 38 tests ✅
+- Remaining:
+  - [ ] End-to-end 測試
+  - [ ] CLI cross-check 5+ scenarios vs known poker calculators
 
 ## Not doing yet (post-POC)
 - Opponent hand / range input
@@ -50,11 +51,13 @@ Poker/
   STATUS.md              # 中文進度報告
   docs/
     interfaces.md        # 模組介面契約 (interface contracts)
+  app.py                 # Streamlit UI entry point
+  cli.py                 # CLI verification script
   src/
-    models/              # Card, Hand, Board data types
+    models/              # Card, Hand, Board, Deck
     engine/              # Evaluator, equity, outs, odds, distribution
-    advisor/             # Advice engine (POC-3)
-  tests/                 # pytest tests, mirrors src/ structure
+    advisor/             # Advice engine v1 (rule-based)
+  tests/                 # pytest tests, mirrors src/ structure (159 tests)
 ```
 
 ## Conventions
@@ -72,6 +75,7 @@ Poker/
 - Equity: river/turn exact enumeration, flop/preflop Monte Carlo (30k/10k default)
 - `_best7_fast` ~10.5μs/call in pure Python — bottleneck for equity
 - Independent `random.Random(seed)` for reproducibility without polluting global RNG
+- Advice engine v1: pure heuristic rules (equity thresholds + outs + pot odds), no ML
 
 ---
 
@@ -159,25 +163,18 @@ Poker/
 | 「我做了一個架構決策」 | `CLAUDE.md` → Key design decisions |
 | 「這個變更會影響你」 | `docs/interfaces.md` → 標 `⚠️ BREAKING` |
 
-### POC-3 平行工作表
+### POC-3 平行工作表（大部分已完成）
 
 ```
-Streamlit UI ←──── 不依賴 advisor，可以先用 placeholder
-     │
-     ├── feature/streamlit-ui     可以馬上開始
-     │
-Advice Engine ←── 依賴 equity + outs（已完成）
-     │
-     ├── feature/advice-engine    可以馬上開始
-     │
-CLI 交叉驗證 ←── 獨立工作
-     │
-     └── feature/cli-verify       可以馬上開始
+Streamlit UI ✅ ─── advice engine 已整合進 UI
+Advice Engine ✅ ── 38 個測試通過
+CLI 交叉驗證  [ ] ── 尚未做
+E2E 測試     [ ] ── 尚未做
 ```
 
-| Branch | Work | Depends on | Can start |
-|--------|------|------------|-----------|
-| `feature/streamlit-ui` | Streamlit app 骨架 + card input + 顯示 | models + engine (done) | **NOW** |
-| `feature/advice-engine` | Advice engine v1 (rule-based) | equity + outs (done) | **NOW** |
-| `feature/cli-verify` | CLI cross-check vs known calculators | CLI script (done) | **NOW** |
-| `feature/streamlit-integration` | 把 advice engine 接進 UI | ui + advice merged | After both |
+| Branch | Work | Status |
+|--------|------|--------|
+| `feature/streamlit-ui` | Streamlit app + card input + 顯示 + advice 整合 | ✅ Done |
+| `feature/advice-engine` | Advice engine v1 (rule-based) + 38 tests | ✅ Done |
+| `feature/cli-verify` | CLI cross-check vs known calculators | ⬜ Pending |
+| — | End-to-end 測試 | ⬜ Pending |
